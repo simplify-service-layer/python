@@ -1,0 +1,24 @@
+[tool.poetry]
+name = "simplify-service-layer-base"
+version = "0.1.0"
+description = ""
+authors = ["jongwoo Yoo <dbwhddn10@gmail.com>"]
+readme = "README.md"
+packages = [{ include = "**/*", from = "src", to = "simplify_service_layer_base" }]
+
+[tool.poe.tasks]
+lint = "poetry run black . && poetry run pyright . && poetry run pylint ./src"
+test = "poetry run pytest"
+
+[tool.poetry.dependencies]
+python = "^3.8"
+
+[tool.poetry.dev-dependencies]
+black = "^24.8.0"
+pylint = "^3.2.7"
+pyright = "^1.1.379"
+pytest = "^8.3.2"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

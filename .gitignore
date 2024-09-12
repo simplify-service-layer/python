@@ -1,0 +1,18 @@
+# dependencies
+/.venv
+
+# editors
+/.idea
+/.vscode
+
+# env files
+.env
+.env.*
+
+# system files
+Thumbs.db
+.DS_Store
+
+# testing
+*cache*
+*cache
