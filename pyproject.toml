@@ -1,10 +1,10 @@
 [tool.poetry]
-name = "simplify-server-layer@python"
-version = "0.1.0"
+name = "simplify-service-layer-base"
+version = "0.0.1"
 description = ""
 authors = ["jongwoo Yoo <dbwhddn10@gmail.com>"]
 readme = "README.md"
-packages = [{ include = "src" }]
+packages = [{ include = "**/*", from = "src", to = "simplify_service_layer_base" }]
 
 [tool.poe.tasks]
 lint = "poetry run black . && poetry run pyright . && poetry run pylint ./src"
