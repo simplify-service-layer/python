@@ -16,3 +16,6 @@ Thumbs.db
 # testing
 *cache*
 *cache
+
+# build
+/dist
