@@ -206,30 +206,31 @@ class ServiceBase(metaclass=ABCMeta):
 
         return arr
 
-    @classmethod
-    def getBindNames(cls):
+    @staticmethod
+    def getBindNames():
         return {}
 
-    @classmethod
-    def getCallbacks(cls):
+    @staticmethod
+    def getCallbacks():
         return {}
 
-    @classmethod
-    def getLoaders(cls):
+    @staticmethod
+    def getLoaders():
         return {}
 
-    @classmethod
-    def getPromiseLists(cls):
+    @staticmethod
+    def getPromiseLists():
         return {}
 
-    @classmethod
-    def getRuleLists(cls):
+    @staticmethod
+    def getRuleLists():
         return {}
 
-    @classmethod
-    def getTraits(cls):
+    @staticmethod
+    def getTraits():
         return []
 
+    @staticmethod
     def initService(value):
         value[1] = {} if not value[1] else None
         value[2] = {} if not value[2] else None
@@ -733,8 +734,11 @@ class ServiceBase(metaclass=ABCMeta):
             messages = self.getValidationErrorTemplateMessages()
             names = {}
 
-            for v, k in self.__names.items():
-                names[k] = self.__resolveBindName(v)
+            for k in list(self.__names.keys()):
+                names[k] = self.__resolveBindName("\{\{" + k + "\}\}")
+
+            for k in list(ruleLists.keys()):
+                names[k] = self.__resolveBindName("\{\{" + k + "\}\}")
 
             for ruleKey, ruleList in ruleLists:
                 errorLists = self.getValidationErrors(
