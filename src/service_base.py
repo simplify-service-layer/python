@@ -76,14 +76,16 @@ class ServiceBase(metaclass=ABCMeta):
         for key in self.__inputs.keys():
             if not re.match(r"^[a-zA-Z][\w-]{0,}", key):
                 raise Exception(
-                    key + " loader key is not support pattern in " + type(self).__name__
+                    key
+                    + " loader key is not support pattern in "
+                    + self.__class__.__name__
                 )
 
         for key in self.__inputs.keys():
             self.__validate(key)
 
-        type(self).getAllCallbacks()
-        type(self).getAllLoaders()
+        self.getAllCallbacks()
+        self.getAllLoaders()
 
     @classmethod
     def addOnFailCallback(cls, callback):
@@ -318,7 +320,9 @@ class ServiceBase(metaclass=ABCMeta):
             self.__isRun = True
 
         if not totalErrors and "result" not in self.getData().keys():
-            raise Exception("result data key is not exists in " + type(self).__name__)
+            raise Exception(
+                "result data key is not exists in " + self.__class__.__name__
+            )
 
         if self.__parent:
             if totalErrors:
@@ -348,7 +352,7 @@ class ServiceBase(metaclass=ABCMeta):
 
                 if not hasArrayObjectRule:
                     raise Exception(
-                        parentKey + " key must has array rule in " + type(self).__name__
+                        parentKey + " key must has array rule in " + cls.__name__
                     )
 
         i = 0
@@ -373,7 +377,7 @@ class ServiceBase(metaclass=ABCMeta):
                     segs.append(seg)
                     k = ".".join(segs)
 
-                    if not isinstance(rKeyVal, list) or (
+                    if not isinstance(rKeyVal, dict) or (
                         len(allSegs) != 0 and seg not in rKeyVal
                     ):
                         isSuccess = False
@@ -410,12 +414,12 @@ class ServiceBase(metaclass=ABCMeta):
                 if k not in ruleLists:
                     break
 
-                if isinstance(rKeyVal, list) and seg not in rKeyVal.keys():
+                if isinstance(rKeyVal, dict) and seg not in rKeyVal.keys():
                     ruleLists[k] = filter(
                         lambda rule: cls.filterPresentRelatedRule(rule), ruleLists[k]
                     )
 
-                if not isinstance(rKeyVal, list) or (
+                if not isinstance(rKeyVal, dict) or (
                     len(allSegs) != 0 and seg not in rKeyVal
                 ):
                     self.__validations[key] == False
@@ -544,7 +548,7 @@ class ServiceBase(metaclass=ABCMeta):
         return list(set(arr))
 
     def __isResolveError(self, value):
-        errorClass = type(self.__resolveError())
+        errorClass = self.__resolveError().__class__
 
         return isinstance(value, errorClass)
 
@@ -612,7 +616,7 @@ class ServiceBase(metaclass=ABCMeta):
                 "validation dependency circular reference["
                 + depth
                 + "] occurred in "
-                + type(self).__name__,
+                + self.__class__.__name__,
             )
 
         if self.__validations[key]:
@@ -725,7 +729,7 @@ class ServiceBase(metaclass=ABCMeta):
                 for j, rule in enumerate(ruleList):
                     ruleLists[k][j] = self.removeDependencyKeySymbolInRule(rule)
 
-            ruleLists = self.filterAvailableExpandedRuleLists(
+            ruleLists = self.__filterAvailableExpandedRuleLists(
                 cls,
                 key,
                 items,
