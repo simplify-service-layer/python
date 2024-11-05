@@ -530,11 +530,18 @@ class ServiceBase(metaclass=ABCMeta):
         ruleLists = (
             self.getAllRuleLists()[cls] if cls in self.getAllRuleLists().keys() else {}
         )
-
-        return filter(
+        filterLists = filter(
             lambda k: re.match(r"^" + key + "$", k) or re.match(r"^" + key + "\.", k),
             ruleLists,
         )
+        keySegs = key.split(".")
+
+        for i in range(len(keySegs) - 1):
+            parentKey = ".".join(keySegs.slice(0, i + 1))
+            if parentKey in ruleLists.keys():
+                filterLists[parentKey] = ruleLists[parentKey]
+
+        return filterLists
 
     def __getShouldOrderedCallbackKeys(self, keys):
         arr = []
