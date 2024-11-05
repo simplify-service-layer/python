@@ -369,8 +369,8 @@ class ServiceBase(metaclass=ABCMeta):
                 matches = re.match(r"^(.+?)\.\*", rKey)
                 allSegs = (matches[1] + ".*").split(".")
                 segs = []
-                rKeyVal = data
-                isSuccess = True
+                rKeyVal = dict(data)
+                isLastKeyExists = True
 
                 while allSegs:
                     seg = allSegs.pop(0)
@@ -380,17 +380,17 @@ class ServiceBase(metaclass=ABCMeta):
                     if not isinstance(rKeyVal, dict) or (
                         len(allSegs) != 0 and seg not in rKeyVal
                     ):
-                        isSuccess = False
+                        isLastKeyExists = False
 
                         break
 
                     if len(allSegs) != 0:
                         rKeyVal = rKeyVal[seg]
 
-                if isSuccess:
+                if isLastKeyExists:
                     for k, v in rKeyVal:
                         rNewKey = re.sub(
-                            "^" + allSegs + "\.\*", allSegs + "." + k, rKey
+                            "^" + matches[1] + "\.\*", matches[1] + "." + k, rKey
                         )
                         ruleLists[rNewKey] = ruleLists[rKey]
                         self.__names[rNewKey] = re.sub(
@@ -399,13 +399,14 @@ class ServiceBase(metaclass=ABCMeta):
                             self.__resolveBindName("{{" + rKey + "}}"),
                         )
 
-                    del ruleLists[rKey]
+                del ruleLists[rKey]
+                if rKey in self.__names.keys():
                     del self.__names[rKey]
 
         for rKey in ruleLists.keys():
             allSegs = rKey.split(".")
             segs = []
-            rKeyVal = data
+            rKeyVal = dict(data)
             while allSegs:
                 seg = allSegs.pop(0)
                 segs.append(seg)
@@ -422,7 +423,6 @@ class ServiceBase(metaclass=ABCMeta):
                 if not isinstance(rKeyVal, dict) or (
                     len(allSegs) != 0 and seg not in rKeyVal
                 ):
-                    self.__validations[key] == False
                     removeRuleLists = list(
                         filter(lambda v: re.match(r"^" + k + "\.", v), ruleLists)
                     )
@@ -685,56 +685,28 @@ class ServiceBase(metaclass=ABCMeta):
     def __validateWith(self, key, items, depth):
         for cls in [*self.getAllTraits(), type(self)]:
             ruleLists = self.__getRelatedRuleLists(key, cls)
-            allDepKeysInRule = []
-            notMustPresentDepKeysInRule = []
-            mustPresentDepKeysInRule = []
-
-            for ruleList in ruleLists.values():
-                for rule in ruleList:
-                    presentRelatedRule = self.filterPresentRelatedRule(rule)
-                    if presentRelatedRule:
-                        notMustPresentDepKeysInRule = [
-                            *notMustPresentDepKeysInRule,
-                            *self.getDependencyKeysInRule(presentRelatedRule),
-                        ]
-
-                    allDepKeysInRule = [
-                        *allDepKeysInRule,
-                        *self.getDependencyKeysInRule(rule),
-                    ]
-
-            mustPresentDepKeysInRule = list(
-                set(allDepKeysInRule) - set(notMustPresentDepKeysInRule)
-            )
-
-            for k in list(set(allDepKeysInRule)):
-                if re.match(r"\.\*", k):
-                    raise Exception(
-                        "wildcard(*) key can't exists in rule dependency in "
-                        + type(self).__name__
-                    )
-                if not self.__validate(k, depth):
-                    self.__validations[key] = False
-
-            for k in list(set(mustPresentDepKeysInRule)):
-                if k not in self.__data.keys():
-                    raise Exception(
-                        '"'
-                        + k
-                        + '" key required rule not exists in '
-                        + type(self).__name__
-                    )
-
-            for k, ruleList in ruleLists.items():
-                for j, rule in enumerate(ruleList):
-                    ruleLists[k][j] = self.removeDependencyKeySymbolInRule(rule)
-
             ruleLists = self.__filterAvailableExpandedRuleLists(
                 cls,
                 key,
                 items,
                 ruleLists,
             )
+            for k, ruleList in ruleLists.items():
+                for j, rule in enumerate(ruleList):
+                    depKeysInRule = cls.getDependencyKeysInRule(rule)
+                    for depKey in depKeysInRule:
+                        if re.match(r"\.\*", depKey):
+                            raise Exception(
+                                "wildcard(*) key can't exists in rule dependency in "
+                                + type(cls).__name__
+                            )
+                        if not self.__validate(depKey, depth):
+                            self.__validations[key] = False
+                            del ruleLists[k][j]
+
+            for k, ruleList in ruleLists.items():
+                for j, rule in enumerate(ruleList):
+                    ruleLists[k][j] = self.removeDependencyKeySymbolInRule(rule)
 
             messages = self.getValidationErrorTemplateMessages()
             names = {}
