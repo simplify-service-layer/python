@@ -103,7 +103,16 @@ class ServiceBase(metaclass=ABCMeta):
     def getAllBindNames(cls):
         arr = {}
         for cl in [*cls.getAllTraits(), cls]:
-            arr.update(cl.getBindNames())
+            bindNames = cl.getBindNames()
+            arr.update(bindNames)
+            for k, v in bindNames.items():
+                if len(k.split(".")) > 1:
+                    raise Exception(
+                        'including "." nested key '
+                        + k
+                        + " cannot be existed in "
+                        + cls.__name__
+                    )
 
         return arr
 
@@ -339,17 +348,8 @@ class ServiceBase(metaclass=ABCMeta):
         for k in ruleLists.keys():
             segs = k.split(".")
             for i in range(len(segs) - 1):
-                hasArrayObjectRule = False
                 parentKey = ".".join(segs[0, i + 1])
-                for cl, parentRuleLists in self.getAllRuleLists().items():
-                    parentRuleList = (
-                        parentRuleLists[parentKey]
-                        if parentKey in parentRuleLists
-                        else []
-                    )
-                    if cl.hasArrayObjectRuleInRuleList(parentRuleList):
-                        hasArrayObjectRule = True
-
+                hasArrayObjectRule = self.__hasArrayObjectRuleInRuleLists(parentKey)
                 if not hasArrayObjectRule:
                     raise Exception(
                         parentKey + " key must has array rule in " + cls.__name__
@@ -393,15 +393,8 @@ class ServiceBase(metaclass=ABCMeta):
                             "^" + matches[1] + "\.\*", matches[1] + "." + k, rKey
                         )
                         ruleLists[rNewKey] = ruleLists[rKey]
-                        self.__names[rNewKey] = re.sub(
-                            r"\{\{(\s*)" + i + r"(\s*)\}\}",
-                            k,
-                            self.__resolveBindName("{{" + rKey + "}}"),
-                        )
 
                 del ruleLists[rKey]
-                if rKey in self.__names.keys():
-                    del self.__names[rKey]
 
         for rKey in ruleLists.keys():
             allSegs = rKey.split(".")
@@ -429,13 +422,6 @@ class ServiceBase(metaclass=ABCMeta):
 
                     for v in removeRuleLists.keys():
                         del ruleLists[v]
-
-                    removeNames = list(
-                        filter(lambda v: re.match(r"^" + k + "\.", v), self.__names)
-                    )
-
-                    for v in removeNames.keys():
-                        del self.__names[v]
 
                     break
 
@@ -554,6 +540,14 @@ class ServiceBase(metaclass=ABCMeta):
 
         return list(set(arr))
 
+    def __hasArrayObjectRuleInRuleLists(self, key):
+        hasArrayObjectRule = False
+        for cl, ruleLists in self.getAllRuleLists().items():
+            ruleList = ruleLists[key] if key in ruleLists else []
+            if cl.hasArrayObjectRuleInRuleList(ruleList):
+                hasArrayObjectRule = True
+        return hasArrayObjectRule
+
     def __isResolveError(self, value):
         errorClass = self.__resolveError().__class__
 
@@ -585,17 +579,40 @@ class ServiceBase(metaclass=ABCMeta):
                 break
 
             key = boundKeys[0]
-            pattern = r"\{\{(\s*)" + key + r"(\s*)\}\}"
-            bindNames = copy.deepcopy(self.getAllBindNames().items)
+            keySegs = key.split(".")
+            mainKey = keySegs[0]
+            bindNames = copy.deepcopy(self.getAllBindNames())
             bindNames.update(self.__names)
 
-            if key in bindNames:
-                bindName = bindNames[key]
+            if mainKey in bindNames:
+                bindName = bindNames[mainKey]
             else:
                 raise Exception(
-                    '"' + key + '" name not exists in ' + type(self).__name__,
+                    '"' + mainKey + '" name not exists in ' + self.__class__.__name__,
                 )
-            name = re.sub(pattern, self.__resolveBindName(bindName), name)
+
+            pattern = r"\{\{(\s*)" + key + r"(\s*)\}\}"
+            replace = self.__resolveBindName(bindName)
+            name = re.sub(pattern, replace, name)
+            matches = re.findall(r"\[\.\.\.\]", name)
+
+            if len(matches) > 1:
+                raise Exception(
+                    name + ' has multiple "[...]" string in ' + self.__class__.__name__
+                )
+            if self.__hasArrayObjectRuleInRuleLists(mainKey) and matches:
+                raise Exception(
+                    '"'
+                    + mainKey
+                    + '" name is required "[...]" string in '
+                    + self.__class__.__name__
+                )
+
+            if len(keySegs) > 1:
+                replace = "[" + "][".join(keySegs[1:]) + "]"
+                name = re.sub(r"\[\.\.\.\]", replace, name)
+            elif len(keySegs) == 1:
+                name = re.sub(r"\[\.\.\.\]", "", name)
 
         return name
 
@@ -690,7 +707,10 @@ class ServiceBase(metaclass=ABCMeta):
         return True
 
     def __validateWith(self, key, items, depth):
-        for cls in [*self.getAllTraits(), type(self)]:
+        mainKey = key.split(".")[0]
+
+        for cls in [*self.getAllTraits(), self.__class__]:
+            names = dict()
             ruleLists = self.__getRelatedRuleLists(key, cls)
             ruleLists = self.__filterAvailableExpandedRuleLists(
                 cls,
@@ -698,6 +718,10 @@ class ServiceBase(metaclass=ABCMeta):
                 items,
                 ruleLists,
             )
+
+            if not ruleLists:
+                names[mainKey] = self.__resolveBindName("{{" + mainKey + "}}")
+
             for k, ruleList in ruleLists.items():
                 for j, rule in enumerate(ruleList):
                     depKeysInRule = cls.getDependencyKeysInRule(rule)
@@ -705,24 +729,20 @@ class ServiceBase(metaclass=ABCMeta):
                         if re.match(r"\.\*", depKey):
                             raise Exception(
                                 "wildcard(*) key can't exists in rule dependency in "
-                                + type(cls).__name__
+                                + cls.__name__
                             )
                         if not self.__validate(depKey, depth):
                             self.__validations[key] = False
                             del ruleLists[k][j]
 
+                        names[depKey] = self.__resolveBindName("{{" + depKey + "}}")
+
             for k, ruleList in ruleLists.items():
                 for j, rule in enumerate(ruleList):
                     ruleLists[k][j] = self.removeDependencyKeySymbolInRule(rule)
+                names[k] = self.__resolveBindName("{{" + k + "}}")
 
             messages = self.getValidationErrorTemplateMessages()
-            names = {}
-
-            for k in list(self.__names.keys()):
-                names[k] = self.__resolveBindName("\{\{" + k + "\}\}")
-
-            for k in list(ruleLists.keys()):
-                names[k] = self.__resolveBindName("\{\{" + k + "\}\}")
 
             for ruleKey, ruleList in ruleLists:
                 errorLists = self.getValidationErrors(
