@@ -731,6 +731,22 @@ class ServiceBase(metaclass=ABCMeta):
                                 "wildcard(*) key can't exists in rule dependency in "
                                 + cls.__name__
                             )
+
+                        depKeySegs = depKey.split(".")
+                        depVal = dict(items)
+                        hasDepVal = True
+                        while not depKeySegs:
+                            seg = depKeySegs.pop(0)
+                            if seg not in depVal:
+                                hasDepVal = False
+
+                                break
+
+                            depVal = depVal[seg]
+
+                        if not hasDepVal:
+                            del ruleLists[k][j]
+
                         if not self.__validate(depKey, depth):
                             self.__validations[key] = False
                             del ruleLists[k][j]
