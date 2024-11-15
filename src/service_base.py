@@ -4,64 +4,62 @@ import inspect
 import json
 import os
 import re
-from abc import *
+import types
+from abc import ABC, abstractmethod
 from importlib.machinery import SourceFileLoader
-from typing import Any, Callable, Null, Self
+from typing import Any, Callable, Dict, List, Type
+
+from typing_extensions import Self
 
 
-class ServiceBase(metaclass=ABCMeta):
+class ServiceBase(ABC):
     BIND_NAME_EXP = r"\{\{([a-zA-Z][\w\.\*]+)\}\}"
-    __onFailCallbacks: list[Callable] = []
-    __onStartCallbacks: list[Callable] = []
-    __onSuccessCallbacks: list[Callable] = []
-    __childs: dict[str, Self]
-    __data: dict[str, Any]
-    __errors: dict[str, list[str]]
-    __inputs: dict[str, Any]
+    __onFailCallbacks: List[Callable] = []
+    __onStartCallbacks: List[Callable] = []
+    __onSuccessCallbacks: List[Callable] = []
+    __childs: Dict[str, Type[Self]]
+    __data: Dict[str, Any]
+    __errors: Dict[str, List[str]]
+    __inputs: Dict[str, Any]
     __isRun: bool
-    __names: dict[str, str]
+    __names: Dict[str, str]
     __parent: Self | None
-    __validations: dict[str, bool]
+    __validations: Dict[str, bool]
 
-    @abstractmethod
     @staticmethod
+    @abstractmethod
     def filterPresentRelatedRule(rule):
         pass
 
-    @abstractmethod
     @staticmethod
+    @abstractmethod
     def getDependencyKeysInRule(rule):
         pass
 
-    @abstractmethod
     @staticmethod
+    @abstractmethod
     def getValidationErrorTemplateMessages():
         pass
 
-    @abstractmethod
     @staticmethod
+    @abstractmethod
     def getValidationErrors(data, ruleLists, names, messages):
         pass
 
-    @abstractmethod
     @staticmethod
-    def hasArrayObjectRuleInRuleList(ruleList):
+    @abstractmethod
+    def hasArrayObjectRuleInRuleList(ruleList, key=None):
         pass
 
-    @abstractmethod
     @staticmethod
-    def removeDependencyKeySymbolInRule(rule):
-        pass
-
     @abstractmethod
-    @staticmethod
     def getResponseBody(result, totalErrors):
         pass
 
     def __init__(
         self,
-        inputs: dict[str, Any] = {},
-        names: dict[str, str] = {},
+        inputs: Dict[str, Any] = {},
+        names: Dict[str, str] = {},
         parent: Self | None = None,
     ):
         self.__childs = {}
@@ -88,22 +86,51 @@ class ServiceBase(metaclass=ABCMeta):
         self.getAllLoaders()
 
     @classmethod
-    def addOnFailCallback(cls, callback):
-        cls.__onFailCallbacks.append(callback)
+    def __get_defined_functions(self, method):
+        filepath = os.path.abspath(inspect.getfile(self))
+        module_loader = SourceFileLoader("service_module", filepath)
+        module = module_loader.exec_module(types.ModuleType(module_loader.name))
+        namespace = {x: getattr(module, x) for x in dir(module)}
+        before_namespace = copy.copy(namespace)
+        function_code = inspect.getsource(getattr(self, method).__code__)
+        indent = re.match(r"^\s*", function_code)[0]
+        function_code = re.sub(r"^\s+", "", function_code)
+        function_code = re.sub(r"\n" + indent, "\n", function_code)
+        parsed = ast.parse(function_code)
+        exec(ast.unparse(parsed.body[0].body), namespace)
+        namespace = dict(
+            filter(
+                lambda x: x[0] not in before_namespace
+                or x[1] != before_namespace[x[0]],
+                namespace.items(),
+            )
+        )
+        namespace = dict(
+            filter(
+                lambda x: x[0] not in ["__builtins__"],
+                namespace.items(),
+            )
+        )
+
+        return namespace
 
     @classmethod
-    def addOnStartCallback(cls, callback):
-        cls.__onStartCallbacks.append(callback)
+    def addOnFailCallback(self, callback):
+        self.__onFailCallbacks.append(callback)
 
     @classmethod
-    def addOnSuccessCallback(cls, callback):
-        cls.__onSuccessCallbacks.append(callback)
+    def addOnStartCallback(self, callback):
+        self.__onStartCallbacks.append(callback)
 
     @classmethod
-    def getAllBindNames(cls):
+    def addOnSuccessCallback(self, callback):
+        self.__onSuccessCallbacks.append(callback)
+
+    @classmethod
+    def getAllBindNames(self):
         arr = {}
-        for cl in [*cls.getAllTraits(), cls]:
-            bindNames = cl.getBindNames()
+        for cls in [*self.getAllTraits(), self]:
+            bindNames = cls.getBindNames()
             arr.update(bindNames)
             for k, v in bindNames.items():
                 if len(k.split(".")) > 1:
@@ -111,75 +138,59 @@ class ServiceBase(metaclass=ABCMeta):
                         'including "." nested key '
                         + k
                         + " cannot be existed in "
-                        + cls.__name__
+                        + self.__name__
                     )
 
         return arr
 
     @classmethod
-    def getAllCallbacks(cls):
+    def getAllCallbacks(self):
         arr = {}
-
-        for key in cls.getCallbacks().keys():
-            if not re.match(r"^[a-zA-Z][\w-]{0,}#[\w-]{1,}(|@defer)", key):
-                raise Exception(
-                    key + " callback key is not support pattern in " + cls.__name__
-                )
-
-        for cl in cls.getTraits():
-            for key, callback in cl.getAllCallbacks().items():
+        for cls in self.getTraits():
+            for key, callback in cls.getAllCallbacks().items():
                 if key in arr.keys():
                     raise Exception(
-                        key + " callback key is duplicated in traits in " + cls.__name__
+                        key
+                        + " callback key is duplicated in traits in "
+                        + self.__name__
                     )
                 arr[key] = callback
 
-        arr.update(cls.getCallbacks())
+        for key, callback in self.__get_defined_functions("getCallbacks").items():
+            if not re.match(r"^[a-zA-Z][\w-]{0,}#[\w-]{1,}(|@defer)", key):
+                raise Exception(
+                    key + " callback key is not support pattern in " + self.__name__
+                )
+            arr[key] = callback
 
         return arr
 
     @classmethod
-    def getAllLoaders(cls):
+    def getAllLoaders(self):
         arr = {}
-
-        for key in cls.getLoaders().keys():
-            if not re.match(r"^[a-zA-Z][\w-]{0,}", key):
-                raise Exception(
-                    key + " loader key is not support pattern in " + cls.__name__
-                )
-
-        for cl in cls.getTraits():
-            filepath = os.path.abspath(inspect.getfile(cl))
-            module = SourceFileLoader("service_module", filepath).load_module()
-            namespace = {x: getattr(module, x) for x in dir(module)}
-            before_namespace = copy.copy(namespace)
-            function_code = inspect.getsource(cl.getAllLoaders.__code__)
-            parsed = ast.parse(re.sub("^\s+", "", function_code))
-            exec(ast.unparse(parsed.body[0].body), namespace)
-            namespace = dict(
-                filter(
-                    lambda x: x[0] not in before_namespace
-                    or x[1] != before_namespace[x[0]],
-                    namespace.items(),
-                )
-            )
-            for key, loader in namespace.items():
+        for cls in self.getTraits():
+            for key, loader in cls.getAllLoaders().items():
                 if key in arr.keys():
                     raise Exception(
                         key + " loader key is duplicated in traits in " + cls.__name__
                     )
                 arr[key] = loader
 
-        arr.update(cls.getLoaders())
+        for key, loader in self.__get_defined_functions("getLoaders").items():
+            if not re.match(r"^[a-zA-Z][\w-]{0,}", key):
+                raise Exception(
+                    key + " loader key is not support pattern in " + self.__name__
+                )
+            arr[key] = loader
 
         return arr
 
     @classmethod
-    def getAllPromiseLists(cls):
+    def getAllPromiseLists(self):
         arr = {}
 
-        for cl in [*cls.getAllTraits(), cls]:
-            for key, promiseList in cl.getPromiseLists().items():
+        for cls in [*self.getAllTraits(), self]:
+            for key, promiseList in cls.getPromiseLists().items():
                 if key not in arr.keys():
                     arr[key] = []
                 for promise in promiseList:
@@ -189,31 +200,31 @@ class ServiceBase(metaclass=ABCMeta):
         return arr
 
     @classmethod
-    def getAllRuleLists(cls):
+    def getAllRuleLists(self):
         arr = {}
 
-        for cl in [*cls.getAllTraits(), cls]:
-            arr[cl] = {}
-            for key, ruleList in cl.getRuleLists().items():
+        for cls in [*self.getAllTraits(), self]:
+            arr[cls] = {}
+            for key, ruleList in cls.getRuleLists().items():
                 if not isinstance(ruleList, list):
                     ruleList = [ruleList]
-                if key not in arr[cl].keys():
-                    arr[cl][key] = []
+                if key not in arr[cls].keys():
+                    arr[cls][key] = []
                 for rule in ruleList:
-                    arr[cl][key].append(rule)
+                    arr[cls][key].append(rule)
 
         return arr
 
     @classmethod
-    def getAllTraits(cls) -> list[Self]:
+    def getAllTraits(self) -> List[Self]:
         arr = []
 
-        for cl in cls.getTraits():
-            if ServiceBase not in cl.__bases__:
+        for cls in self.getTraits():
+            if ServiceBase not in cls.__bases__:
                 raise Exception("trait class must extends Service")
-            arr = [*arr, *cl.getAllTraits()]
+            arr = [*arr, *cls.getAllTraits()]
 
-        arr = [*arr, *cls.getTraits()]
+        arr = [*arr, *self.getTraits()]
         arr = list(set(arr))
 
         return arr
@@ -224,11 +235,11 @@ class ServiceBase(metaclass=ABCMeta):
 
     @staticmethod
     def getCallbacks():
-        return {}
+        pass
 
     @staticmethod
     def getLoaders():
-        return {}
+        pass
 
     @staticmethod
     def getPromiseLists():
@@ -244,9 +255,12 @@ class ServiceBase(metaclass=ABCMeta):
 
     @staticmethod
     def initService(value):
-        value[1] = {} if not value[1] else None
-        value[2] = {} if not value[2] else None
-        value[3] = None if not value[3] else None
+        if len(value) < 2:
+            value[1] = {}
+        if len(value) < 3:
+            value[2] = {}
+        if len(value) < 4:
+            value[3] = None
 
         cls = value[0]
         data = value[1]
@@ -260,14 +274,25 @@ class ServiceBase(metaclass=ABCMeta):
         return cls(data, names, parent)
 
     @classmethod
-    def isInitable(cls, value):
+    def isInitable(self, value):
         return (
-            isinstance(value, list) and len(value) != 0 and cls.isServiceClass(value[0])
+            isinstance(value, list)
+            and len(value) != 0
+            and self.isServiceClass(value[0])
         )
 
-    @staticmethod
-    def isServiceClass(value):
-        return isinstance(value, type) and ServiceBase in value.__bases__
+    @classmethod
+    def isServiceClass(self, value):
+        if not isinstance(value, type):
+            return False
+
+        isService = False
+        for x in value.__bases__:
+            if x == ServiceBase:
+                isService = True
+            elif x != object:
+                isService = self.isServiceClass(x)
+        return isService
 
     def getChilds(self):
         return copy.deepcopy(self.__childs)
@@ -328,11 +353,6 @@ class ServiceBase(metaclass=ABCMeta):
 
             self.__isRun = True
 
-        if not totalErrors and "result" not in self.getData().keys():
-            raise Exception(
-                "result data key is not exists in " + self.__class__.__name__
-            )
-
         if self.__parent:
             if totalErrors:
                 return self.__resolveError()
@@ -346,9 +366,9 @@ class ServiceBase(metaclass=ABCMeta):
     def __filterAvailableExpandedRuleLists(self, cls, key, data, ruleLists):
 
         for k in ruleLists.keys():
-            segs = k.split(".")
-            for i in range(len(segs) - 1):
-                parentKey = ".".join(segs[0, i + 1])
+            keySegs = k.split(".")
+            for i in range(len(keySegs) - 1):
+                parentKey = ".".join(keySegs[0 : i + 1])
                 hasArrayObjectRule = self.__hasArrayObjectRuleInRuleLists(parentKey)
                 if not hasArrayObjectRule:
                     raise Exception(
@@ -358,8 +378,11 @@ class ServiceBase(metaclass=ABCMeta):
         i = 0
         while True:
             i = i + 1
-            filteredRuleLists = filter(
-                lambda k: re.match(r"\.\*$", k) or re.match(r"\.\*\.", k), ruleLists
+            filteredRuleLists = dict(
+                filter(
+                    lambda k: re.match(r"\.\*$", k[0]) or re.match(r"\.\*\.", k[0]),
+                    ruleLists.items(),
+                )
             )
 
             if len(filteredRuleLists) == 0:
@@ -390,7 +413,7 @@ class ServiceBase(metaclass=ABCMeta):
                 if isLastKeyExists:
                     for k, v in rKeyVal:
                         rNewKey = re.sub(
-                            "^" + matches[1] + "\.\*", matches[1] + "." + k, rKey
+                            r"^" + matches[1] + r"\.\*", matches[1] + r"." + k, rKey
                         )
                         ruleLists[rNewKey] = ruleLists[rKey]
 
@@ -409,15 +432,21 @@ class ServiceBase(metaclass=ABCMeta):
                     break
 
                 if isinstance(rKeyVal, dict) and seg not in rKeyVal.keys():
-                    ruleLists[k] = filter(
-                        lambda rule: cls.filterPresentRelatedRule(rule), ruleLists[k]
+                    ruleLists[k] = list(
+                        filter(
+                            lambda rule: cls.filterPresentRelatedRule(rule),
+                            ruleLists[k],
+                        )
                     )
 
                 if not isinstance(rKeyVal, dict) or (
                     len(allSegs) != 0 and seg not in rKeyVal
                 ):
-                    removeRuleLists = list(
-                        filter(lambda v: re.match(r"^" + k + "\.", v), ruleLists)
+                    removeRuleLists = dict(
+                        filter(
+                            lambda v: re.match(r"^" + k + r"\.", v[0]),
+                            ruleLists.items(),
+                        )
                     )
 
                     for v in removeRuleLists.keys():
@@ -473,12 +502,18 @@ class ServiceBase(metaclass=ABCMeta):
         hasError = False
 
         for i, v in enumerate(values):
+            service = None
+
             if self.isInitable(v):
-                v[1] = {} if len(v) >= 2 and not v[1] else None
-                v[2] = {} if len(v) >= 3 and not v[2] else None
+                if len(v) < 2:
+                    v.append({})
+                if len(v) < 3:
+                    v.append({})
+
                 for k, name in v[2].items():
                     v[2][k] = self.__resolveBindName(name)
-                v[3] = self
+
+                v.append(self)
                 service = self.initService(v)
                 resolved = service.run()
             elif isinstance(v, ServiceBase):
@@ -486,7 +521,11 @@ class ServiceBase(metaclass=ABCMeta):
                 resolved = service.run()
 
             if service:
-                self.__childs[key + "." + i if hasServicesInArray else key] = service
+                if hasServicesInArray:
+                    self.__childs[key + "." + str(i)] = service
+                else:
+                    self.__childs[key] = service
+
                 if self.__isResolveError(resolved):
                     del values[i]
                     hasError = True
@@ -499,13 +538,17 @@ class ServiceBase(metaclass=ABCMeta):
         return self.__data
 
     def __getOrderedCallbackKeys(self, key):
-        promiseKeys = filter(
-            lambda value: re.match("^" + key + "#", value),
-            self.getAllPromiseLists().keys(),
+        promiseKeys = list(
+            filter(
+                lambda value: re.match("^" + key + "#", value),
+                self.getAllPromiseLists().keys(),
+            )
         )
-        allKeys = filter(
-            lambda value: re.match("^" + key + "#", value),
-            self.getAllCallbacks().keys(),
+        allKeys = list(
+            filter(
+                lambda value: re.match("^" + key + "#", value),
+                self.getAllCallbacks().keys(),
+            )
         )
         orderedKeys = self.__getShouldOrderedCallbackKeys(promiseKeys)
         restKeys = list(set(allKeys) - set(orderedKeys))
@@ -516,14 +559,18 @@ class ServiceBase(metaclass=ABCMeta):
         ruleLists = (
             self.getAllRuleLists()[cls] if cls in self.getAllRuleLists().keys() else {}
         )
-        filterLists = filter(
-            lambda k: re.match(r"^" + key + "$", k) or re.match(r"^" + key + "\.", k),
-            ruleLists,
+
+        filterLists = dict(
+            filter(
+                lambda k: re.match(r"^" + key + "$", k[0])
+                or re.match(r"^" + key + r"\.", k[0]),
+                ruleLists.items(),
+            )
         )
         keySegs = key.split(".")
 
         for i in range(len(keySegs) - 1):
-            parentKey = ".".join(keySegs.slice(0, i + 1))
+            parentKey = ".".join(keySegs[0 : i + 1])
             if parentKey in ruleLists.keys():
                 filterLists[parentKey] = ruleLists[parentKey]
 
@@ -535,16 +582,16 @@ class ServiceBase(metaclass=ABCMeta):
         for key in keys:
             promiseLists = self.getAllPromiseLists()
             deps = promiseLists[key] if key in promiseLists else []
-            list = self.__getShouldOrderedCallbackKeys(deps)
-            arr = [*list, key, *arr]
+            orderedKeys = self.__getShouldOrderedCallbackKeys(deps)
+            arr = [*orderedKeys, key, *arr]
 
         return list(set(arr))
 
     def __hasArrayObjectRuleInRuleLists(self, key):
         hasArrayObjectRule = False
-        for cl, ruleLists in self.getAllRuleLists().items():
+        for cls, ruleLists in self.getAllRuleLists().items():
             ruleList = ruleLists[key] if key in ruleLists else []
-            if cl.hasArrayObjectRuleInRuleList(ruleList):
+            if cls.hasArrayObjectRuleInRuleList(ruleList, key):
                 hasArrayObjectRule = True
         return hasArrayObjectRule
 
@@ -600,7 +647,7 @@ class ServiceBase(metaclass=ABCMeta):
                 raise Exception(
                     name + ' has multiple "[...]" string in ' + self.__class__.__name__
                 )
-            if self.__hasArrayObjectRuleInRuleLists(mainKey) and matches:
+            if self.__hasArrayObjectRuleInRuleLists(mainKey) and not matches:
                 raise Exception(
                     '"'
                     + mainKey
@@ -611,8 +658,6 @@ class ServiceBase(metaclass=ABCMeta):
             if len(keySegs) > 1:
                 replace = "[" + "][".join(keySegs[1:]) + "]"
                 name = re.sub(r"\[\.\.\.\]", replace, name)
-            elif len(keySegs) == 1:
-                name = re.sub(r"\[\.\.\.\]", "", name)
 
         return name
 
@@ -620,14 +665,17 @@ class ServiceBase(metaclass=ABCMeta):
         return Exception("can't be resolve")
 
     def __runAllDeferCallbacks(self):
-        callbacks = filter(
-            lambda key: re.match("/:defer$/", key), self.getAllCallbacks()
+        callbacks = list(
+            filter(
+                lambda key: re.match("/:defer$/", key[0]),
+                self.getAllCallbacks().items(),
+            )
         )
 
         for callback in callbacks:
             self.__resolve(callback)
 
-        for child in self.__childs:
+        for child in self.__childs.values():
             child.__runAllDeferCallbacks()
 
     def __validate(self, key, depth=""):
@@ -643,13 +691,13 @@ class ServiceBase(metaclass=ABCMeta):
                 + self.__class__.__name__,
             )
 
-        if self.__validations[key]:
+        if key in self.__validations:
             return self.__validations[key]
 
         keySegs = key.split(".")
 
-        for i in range(keySegs.length - 1):
-            parentKey = ".".join(keySegs.slice(0, i + 1))
+        for i in range(len(keySegs) - 1):
+            parentKey = ".".join(keySegs[0 : i + 1])
             if (
                 parentKey in self.__validations.keys()
                 and True == self.__validations[parentKey]
@@ -680,7 +728,7 @@ class ServiceBase(metaclass=ABCMeta):
                 self.__validations[mainKey] = False
 
         data = self.__getLoadedDataWith(mainKey)
-        items = json.load(json.dumps(data))
+        items = json.loads(json.dumps(data, default=vars))
 
         self.__validateWith(key, items, depth)
 
@@ -719,7 +767,7 @@ class ServiceBase(metaclass=ABCMeta):
                 ruleLists,
             )
 
-            if not ruleLists:
+            if ruleLists:
                 names[mainKey] = self.__resolveBindName("{{" + mainKey + "}}")
 
             for k, ruleList in ruleLists.items():
@@ -754,13 +802,11 @@ class ServiceBase(metaclass=ABCMeta):
                         names[depKey] = self.__resolveBindName("{{" + depKey + "}}")
 
             for k, ruleList in ruleLists.items():
-                for j, rule in enumerate(ruleList):
-                    ruleLists[k][j] = self.removeDependencyKeySymbolInRule(rule)
                 names[k] = self.__resolveBindName("{{" + k + "}}")
 
             messages = self.getValidationErrorTemplateMessages()
 
-            for ruleKey, ruleList in ruleLists:
+            for ruleKey, ruleList in ruleLists.items():
                 errorLists = self.getValidationErrors(
                     items,
                     {(ruleKey): ruleList},
@@ -772,10 +818,10 @@ class ServiceBase(metaclass=ABCMeta):
                     if ruleKey not in self.__errors:
                         self.__errors[ruleKey] = []
 
-                    self.__errors[ruleKey] = [
-                        *self.__errors[ruleKey],
-                        *errorLists[ruleKey],
-                    ]
+                    for error in errorLists[ruleKey]:
+                        if error not in self.__errors[ruleKey]:
+                            self.__errors[ruleKey].append(error)
+
                     self.__validations[key] = False
                     return False
 

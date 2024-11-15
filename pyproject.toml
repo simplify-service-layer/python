@@ -12,6 +12,7 @@ test = "poetry run pytest"
 
 [tool.poetry.dependencies]
 python = "^3.8"
+jsonschema = "^4.23.0"
 
 [tool.poetry.dev-dependencies]
 black = "^24.8.0"
