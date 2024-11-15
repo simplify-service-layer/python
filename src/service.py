@@ -64,7 +64,7 @@ class Service(ServiceBase):
 
     @staticmethod
     def getValidationErrorTemplateMessages():
-        return {}
+        return {"required": "'{property}' is required"}
 
     @staticmethod
     def getValidationErrors(data: dict, ruleLists: dict, names: dict, messages: dict):
