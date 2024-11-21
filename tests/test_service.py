@@ -138,6 +138,35 @@ def test_load_data_from_loader():
     assert service2.getTotalErrors() != {}
 
 
+def test_load_data_from_loader_with_dependency():
+    class Service1(Service):
+        def getBindNames():
+            return {
+                "result": "name for result",
+            }
+
+        def getLoaders():
+            def aaa():
+                return "aaaaaa"
+
+            def result(aaa):
+                return aaa + " value"
+
+        def getRuleLists():
+            return {
+                "result": {
+                    "required": ["result"],
+                    "properties": {"result": {"type": "string"}},
+                }
+            }
+
+    service1 = Service1()
+    service1.run()
+
+    assert service1.getTotalErrors() == {}
+    assert service1.getData()["result"] == "aaaaaa value"
+
+
 def test_load_data_key_invaild_because_of_children_rule():
     class Service1(Service):
         def getBindNames():
