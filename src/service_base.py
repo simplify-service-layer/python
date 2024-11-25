@@ -683,6 +683,9 @@ class ServiceBase(ABC):
         depths = depth.split("|")
         mainKey = key.split(".")[0]
 
+        if key in self.__validations:
+            return self.__validations[key]
+
         if len(list(filter(lambda seg: seg == key, depths))) >= 2:
             raise Exception(
                 "validation dependency circular reference["
@@ -690,9 +693,6 @@ class ServiceBase(ABC):
                 + "] occurred in "
                 + self.__class__.__name__,
             )
-
-        if key in self.__validations:
-            return self.__validations[key]
 
         keySegs = key.split(".")
 
