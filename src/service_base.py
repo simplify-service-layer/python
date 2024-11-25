@@ -157,7 +157,7 @@ class ServiceBase(ABC):
                 arr[key] = callback
 
         for key, callback in self.__get_defined_functions("getCallbacks").items():
-            if not re.match(r"^[a-zA-Z][\w-]{0,}#[\w-]{1,}(|@defer)", key):
+            if not re.match(r"^[a-zA-Z][\w-]{0,}__[\w-]{1,}(|@defer)", key):
                 raise Exception(
                     key + " callback key is not support pattern in " + self.__name__
                 )
@@ -540,13 +540,13 @@ class ServiceBase(ABC):
     def __getOrderedCallbackKeys(self, key):
         promiseKeys = list(
             filter(
-                lambda value: re.match("^" + key + "#", value),
+                lambda value: re.match("^" + key + "__", value),
                 self.getAllPromiseLists().keys(),
             )
         )
         allKeys = list(
             filter(
-                lambda value: re.match("^" + key + "#", value),
+                lambda value: re.match("^" + key + "__", value),
                 self.getAllCallbacks().keys(),
             )
         )
