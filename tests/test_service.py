@@ -11,7 +11,7 @@ def test_load_data_from_input():
 
     class ParentService(Service):
         def getBindNames():
-            return {"result": "name for key1"}
+            return {"result": "name for result"}
 
         def getCallbacks():
             pass
