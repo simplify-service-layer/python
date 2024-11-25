@@ -7,6 +7,29 @@ sys.path.append(os.getcwd())
 from src.service import Service
 
 
+def test_callback():
+    class ParentService(Service):
+        def getBindNames():
+            return {"result": "name for result"}
+
+        def getCallbacks():
+            def result__cb1(result):
+                result.update({"abcd": "aaaa"})
+
+        def getLoaders():
+            pass
+
+        def getRuleLists():
+            return {"result": {"required": ["result"]}}
+
+    service = ParentService({"result": {"aaaa": "aaaa"}})
+    service.run()
+
+    assert service.getTotalErrors() == {}
+    assert service.getData()["result"]["aaaa"] == "aaaa"
+    assert service.getData()["result"]["abcd"] == "aaaa"
+
+
 def test_load_data_from_input():
 
     class ParentService(Service):
