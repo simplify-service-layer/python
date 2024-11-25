@@ -737,6 +737,7 @@ class ServiceBase(ABC):
             self.__data[key] = data[key]
 
         orderedCallbackKeys = self.__getOrderedCallbackKeys(key)
+        callbacks = self.getAllCallbacks()
 
         for callbackKey in orderedCallbackKeys:
             callback = self.getAllCallbacks()[callbackKey]
@@ -746,8 +747,11 @@ class ServiceBase(ABC):
                 if not self.__validate(dep, depth):
                     self.__validations[key] = False
 
-            if not re.match("@defer$", callbackKey):
-                self.__resolve(callback)
+        if True == self.__validations[key]:
+            for callbackKey in orderedCallbackKeys:
+                if not re.match("@defer$", callbackKey):
+                    callback = callbacks[callbackKey]
+                    self.__resolve(callback)
 
         if False == self.__validations[key]:
             return False
