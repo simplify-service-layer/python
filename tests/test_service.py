@@ -30,6 +30,71 @@ def test_callback():
     assert service.getData()["result"]["abcd"] == "aaaa"
 
 
+def test_callback_with_dependency():
+    class ParentService1(Service):
+        def getBindNames():
+            return {"result": "name for result"}
+
+        def getCallbacks():
+            def result__cb1(result, test1):
+                result.update({"abcd": test1})
+
+            def result__cb2(result, test2):
+                result.update({"bcde": test2})
+
+        def getLoaders():
+            def test1():
+                return "test1 val"
+
+        def getRuleLists():
+            return {"result": {"required": ["result"]}}
+
+    service1 = ParentService1({"result": {"aaaa": "aaaa"}})
+    service1.run()
+
+    assert service1.getTotalErrors() == {}
+    assert service1.getData()["result"]["aaaa"] == "aaaa"
+    assert service1.getData()["result"]["abcd"] == "test1 val"
+    assert True == service1.getValidations()["result"]
+    assert True == service1.getValidations()["test1"]
+    assert True == service1.getValidations()["test2"]
+    assert "bcde" not in dict(service1.getData()["result"]).keys()
+
+    class ParentService2(Service):
+        def getBindNames():
+            return {
+                "result": "name for result",
+                "test2": "name for test2",
+            }
+
+        def getCallbacks():
+            def result__cb1(result, test1):
+                result.update({"abcd": test1})
+
+            def result__cb2(result, test2):
+                result.update({"bcde": test2})
+
+        def getLoaders():
+            def test1():
+                return "test1 val"
+
+        def getRuleLists():
+            return {
+                "result": {"required": ["result"]},
+                "test2": {"required": ["test2"]},
+            }
+
+    service2 = ParentService2({"result": {"aaaa": "aaaa"}})
+    service2.run()
+
+    assert service2.getTotalErrors() != {}
+    assert False == service2.getValidations()["result"]
+    assert True == service2.getValidations()["test1"]
+    assert False == service2.getValidations()["test2"]
+    assert "abcd" not in dict(service2.getData()["result"]).keys()
+    assert "bcde" not in dict(service2.getData()["result"]).keys()
+
+
 def test_load_data_from_input():
 
     class ParentService(Service):
