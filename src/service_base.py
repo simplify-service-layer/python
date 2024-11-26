@@ -612,8 +612,11 @@ class ServiceBase(ABC):
         for i, depName in enumerate(depNames):
             if self.__validations[depName] and depName in self.__data.keys():
                 depVals.append(self.__data[depName])
-            elif self.__validations[depName] and params[i] != inspect.Parameter.empty:
-                depVals.append(params[i])
+            elif (
+                self.__validations[depName]
+                and params[depName] != inspect.Parameter.empty
+            ):
+                depVals.append(params[depName])
             else:
                 return self.__resolveError()
 
