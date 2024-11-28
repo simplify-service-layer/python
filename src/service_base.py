@@ -363,7 +363,7 @@ class ServiceBase(ABC):
 
         return self.getResponseBody(result, totalErrors)
 
-    def __filterAvailableExpandedRuleLists(self, cls, key, data, ruleLists):
+    def __filterAvailableExpandedRuleLists(self, cls, data, ruleLists):
 
         for k in ruleLists.keys():
             keySegs = k.split(".")
@@ -769,7 +769,6 @@ class ServiceBase(ABC):
             ruleLists = self.__getRelatedRuleLists(key, cls)
             ruleLists = self.__filterAvailableExpandedRuleLists(
                 cls,
-                key,
                 items,
                 ruleLists,
             )
