@@ -17,14 +17,14 @@ class ServiceBase(ABC):
     __onFailCallbacks: List[Callable] = []
     __onStartCallbacks: List[Callable] = []
     __onSuccessCallbacks: List[Callable] = []
-    __childs: Dict[str, Type[Self]]
-    __data: Dict[str, Any]
-    __errors: Dict[str, List[str]]
-    __inputs: Dict[str, Any]
-    __isRun: bool
-    __names: Dict[str, str]
-    __parent: Self | None
-    __validations: Dict[str, bool]
+    __childs: Dict[str, Type[Self]] = {}
+    __data: Dict[str, Any] = {}
+    __errors: Dict[str, List[str]] = {}
+    __inputs: Dict[str, Any] = {}
+    __isRun: bool = False
+    __names: Dict[str, str] = {}
+    __parent: Self | None = None
+    __validations: Dict[str, bool] = {}
 
     @staticmethod
     @abstractmethod
@@ -55,35 +55,6 @@ class ServiceBase(ABC):
     @abstractmethod
     def getResponseBody(result, totalErrors):
         pass
-
-    def __init__(
-        self,
-        inputs: Dict[str, Any] = {},
-        names: Dict[str, str] = {},
-        parent: Self | None = None,
-    ):
-        self.__childs = {}
-        self.__data = {}
-        self.__errors = {}
-        self.__inputs = inputs
-        self.__names = names
-        self.__validations = {}
-        self.__isRun = False
-        self.__parent = parent
-
-        for key in self.__inputs.keys():
-            if not re.match(r"^[a-zA-Z][\w-]{0,}", key):
-                raise Exception(
-                    key
-                    + " loader key is not support pattern in "
-                    + self.__class__.__name__
-                )
-
-        for key in self.__inputs.keys():
-            self.__validate(key)
-
-        self.getAllCallbacks()
-        self.getAllLoaders()
 
     @classmethod
     def __get_defined_functions(self, method):
@@ -259,19 +230,16 @@ class ServiceBase(ABC):
             value[1] = {}
         if len(value) < 3:
             value[2] = {}
-        if len(value) < 4:
-            value[3] = None
 
         cls = value[0]
         data = value[1]
         names = value[2]
-        parent = value[3]
 
         for key, value in data:
             if "" == value:
                 del data[key]
 
-        return cls(data, names, parent)
+        return cls().init(data, names)
 
     @classmethod
     def isInitable(self, value):
@@ -303,6 +271,18 @@ class ServiceBase(ABC):
     def getErrors(self):
         return copy.deepcopy(self.__errors)
 
+    def getInjectedPropNames(self):
+        injectedPropNames = []
+
+        for k in vars(self).keys():
+            if k.startswith("_" + self.__class__.__name__ + "__"):
+                injectedPropNames.append(
+                    re.sub(r"^_" + self.__class__.__name__ + "__", "__", k)
+                )
+            else:
+                injectedPropNames.append(k)
+        return injectedPropNames
+
     def getInputs(self):
         return copy.deepcopy(self.__inputs)
 
@@ -321,6 +301,42 @@ class ServiceBase(ABC):
 
     def getValidations(self):
         return copy.deepcopy(self.__validations)
+
+    def init(
+        self,
+        inputs: Dict[str, Any] = {},
+        names: Dict[str, str] = {},
+    ):
+        if self.__isRun:
+            raise Exception("already run service [" + self.__class__.__name__ + "]")
+
+        for key in inputs.keys():
+            if key in self.getInjectedPropNames():
+                raise Exception(
+                    key
+                    + " input key is duplicated with property in "
+                    + self.__class__.__name__
+                )
+
+            if not re.match(r"^[a-zA-Z][\w-]{0,}", key):
+                raise Exception(
+                    key
+                    + " input key is not support pattern in "
+                    + self.__class__.__name__
+                )
+
+        self.__childs = {}
+        self.__data = {}
+        self.__errors = {}
+        self.__inputs = inputs
+        self.__names = names
+        self.__validations = {}
+        self.__isRun = False
+
+        self.getAllCallbacks()
+        self.getAllLoaders()
+
+        return self._clone()
 
     def run(self):
         totalErrors = self.getTotalErrors()
@@ -362,6 +378,12 @@ class ServiceBase(ABC):
         result = self.getData()["result"] if "result" in self.getData().keys() else None
 
         return self.getResponseBody(result, totalErrors)
+
+    def setParent(self, parent):
+        self.__parent = parent
+
+    def _clone(self):
+        return copy.copy(self)
 
     def __filterAvailableExpandedRuleLists(self, cls, data, ruleLists):
 
@@ -483,6 +505,8 @@ class ServiceBase(ABC):
 
         if key in self.getInputs().keys():
             value = self.getInputs()[key]
+        elif key in self.getInjectedPropNames():
+            value = getattr(self, key)
         else:
             if not loader:
                 return data
@@ -513,11 +537,12 @@ class ServiceBase(ABC):
                 for k, name in v[2].items():
                     v[2][k] = self.__resolveBindName(name)
 
-                v.append(self)
                 service = self.initService(v)
+                service.setParent(self)
                 resolved = service.run()
             elif isinstance(v, ServiceBase):
                 service = v
+                service.setParent(self)
                 resolved = service.run()
 
             if service:

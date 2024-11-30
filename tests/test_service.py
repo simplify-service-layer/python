@@ -1,6 +1,7 @@
 import json
 import os
 import sys
+from typing import List
 
 sys.path.append(os.getcwd())
 
@@ -22,7 +23,7 @@ def test_callback():
         def getRuleLists():
             return {"result": {"required": ["result"]}}
 
-    service = ParentService({"result": {"aaaa": "aaaa"}})
+    service = ParentService().init({"result": {"aaaa": "aaaa"}})
     service.run()
 
     assert service.getTotalErrors() == {}
@@ -49,7 +50,7 @@ def test_callback_with_dependency():
         def getRuleLists():
             return {"result": {"required": ["result"]}}
 
-    service1 = ParentService1({"result": {"aaaa": "aaaa"}})
+    service1 = ParentService1().init({"result": {"aaaa": "aaaa"}})
     service1.run()
 
     assert service1.getTotalErrors() == {}
@@ -84,7 +85,7 @@ def test_callback_with_dependency():
                 "test2": {"required": ["test2"]},
             }
 
-    service2 = ParentService2({"result": {"aaaa": "aaaa"}})
+    service2 = ParentService2().init({"result": {"aaaa": "aaaa"}})
     service2.run()
 
     assert service2.getTotalErrors() != {}
@@ -110,7 +111,7 @@ def test_load_data_from_input():
         def getRuleLists():
             return {"result": {"required": ["result"]}}
 
-    service = ParentService({"result": "result value"})
+    service = ParentService().init({"result": "result value"})
     service.run()
 
     assert service.getTotalErrors() == {}
@@ -138,7 +139,7 @@ def test_load_data_from_input_child_batch_service():
         def getRuleLists():
             return {"result": {"required": ["result"]}}
 
-    service = ParentService(
+    service = ParentService().init(
         {
             "result": [
                 [ChildService],
@@ -170,7 +171,7 @@ def test_load_data_from_input_service():
         def getRuleLists():
             return {"result": {"required": ["result"]}}
 
-    service = ParentService({"result": [ChildService]})
+    service = ParentService().init({"result": [ChildService]})
     service.run()
     value = service.getData()["result"]
 
@@ -197,7 +198,7 @@ def test_load_data_from_loader():
                 }
             }
 
-    service1 = Service1()
+    service1 = Service1().init()
     service1.run()
 
     assert service1.getTotalErrors() == {}
@@ -220,7 +221,7 @@ def test_load_data_from_loader():
                 }
             }
 
-    service2 = Service2()
+    service2 = Service2().init()
     service2.run()
 
     assert service2.getTotalErrors() != {}
@@ -248,7 +249,91 @@ def test_load_data_from_loader_with_dependency():
                 }
             }
 
-    service1 = Service1()
+    service1 = Service1().init()
+    service1.run()
+
+    assert service1.getTotalErrors() == {}
+    assert service1.getData()["result"] == "aaaaaa value"
+
+
+def test_load_data_from_property():
+    class Service1(Service):
+        def __init__(self) -> None:
+            super().__init__()
+            self.result: str = "aaa"
+
+        def getBindNames():
+            return {
+                "result": "name for result",
+            }
+
+        def getLoaders():
+            pass
+
+        def getRuleLists():
+            return {
+                "result": {
+                    "required": ["result"],
+                    "properties": {"result": {"type": "string"}},
+                }
+            }
+
+    service1 = Service1().init()
+    service1.run()
+
+    assert service1.getTotalErrors() == {}
+
+    class Service2(Service):
+        def __init__(self) -> None:
+            super().__init__()
+            self.result: List[str] = ["aaa", "bbb", "ccc"]
+
+        def getBindNames():
+            return {
+                "result": "name for result",
+            }
+
+        def getLoaders():
+            pass
+
+        def getRuleLists():
+            return {
+                "result": {
+                    "required": ["result"],
+                    "properties": {"result": {"type": "string"}},
+                }
+            }
+
+    service2 = Service2().init()
+    service2.run()
+
+    assert service2.getTotalErrors() != {}
+
+
+def test_load_data_from_property_in_dependency():
+    class Service1(Service):
+        def __init__(self) -> None:
+            super().__init__()
+            self.aaa: str = "aaaaaa"
+
+        def getBindNames():
+            return {
+                "result": "name for result",
+            }
+
+        def getLoaders():
+            def result(aaa):
+                return aaa + " value"
+
+        def getRuleLists():
+            return {
+                "result": {
+                    "required": ["result"],
+                    "properties": {"result": {"type": "string"}},
+                }
+            }
+
+    service1 = Service1().init()
     service1.run()
 
     assert service1.getTotalErrors() == {}
@@ -306,7 +391,7 @@ def test_load_data_key_invaild_because_of_children_rule():
                 },
             }
 
-    service1 = Service1()
+    service1 = Service1().init()
     service1.run()
 
     assert service1.getValidations()["result"] == False
@@ -394,7 +479,7 @@ def test_load_data_key_invaild_because_of_parent_rule():
                 },
             }
 
-    service1 = Service1()
+    service1 = Service1().init()
     service1.run()
 
     assert service1.getValidations()["result"] == False
@@ -419,7 +504,7 @@ def test_load_name():
                 },
             }
 
-    service = Service1({}, {"result": "result name"})
+    service = Service1().init({}, {"result": "result name"})
     service.run()
 
     assert service.getTotalErrors() != {}
@@ -441,7 +526,7 @@ def test_load_name_bound():
                 },
             }
 
-    service = Service1()
+    service = Service1().init()
     service.run()
 
     assert service.getTotalErrors() != {}
@@ -463,7 +548,7 @@ def test_load_name_bound_nested():
                 },
             }
 
-    service = Service1(
+    service = Service1().init(
         {}, {"result": "{{abcd}}", "aaa": "aaaa", "abcd": "{{aaa}} bbb ccc ddd"}
     )
     service.run()
@@ -495,7 +580,7 @@ def test_load_name_multidimension():
                 },
             }
 
-    service = Service1(
+    service = Service1().init(
         {"result": {"a": {}}},
         {"result": "result[...] name"},
     )
