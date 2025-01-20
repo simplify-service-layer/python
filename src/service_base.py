@@ -34,13 +34,13 @@ class ServiceBase(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    @classmethod
-    def getLocale(cls):
+    @staticmethod
+    def getValidationErrorTemplateMessages():
         pass
 
     @abstractmethod
-    @classmethod
-    def getValidationErrors(cls, locale, data, ruleLists, names):
+    @staticmethod
+    def getValidationErrors(data, ruleLists, names, messages):
         pass
 
     @abstractmethod
@@ -731,7 +731,7 @@ class ServiceBase(metaclass=ABCMeta):
                 ruleLists,
             )
 
-            locale = self.getLocale()
+            messages = self.getValidationErrorTemplateMessages()
             names = {}
 
             for v, k in self.__names.items():
@@ -739,10 +739,10 @@ class ServiceBase(metaclass=ABCMeta):
 
             for ruleKey, ruleList in ruleLists:
                 errorLists = self.getValidationErrors(
-                    locale,
                     items,
                     {(ruleKey): ruleList},
                     names,
+                    messages,
                 )
 
                 if errorLists:
