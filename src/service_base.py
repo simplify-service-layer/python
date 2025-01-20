@@ -247,13 +247,15 @@ class ServiceBase(metaclass=ABCMeta):
 
         return cls(data, names, parent)
 
-    def isInitable(value):
+    @classmethod
+    def isInitable(cls, value):
         return (
-            isinstance(value, list)
-            and len(value) != 0
-            and isinstance(value[0], type)
-            and ServiceBase in value[0].__bases__
+            isinstance(value, list) and len(value) != 0 and cls.isServiceClass(value[0])
         )
+
+    @staticmethod
+    def isServiceClass(value):
+        return isinstance(value, type) and ServiceBase in value.__bases__
 
     def getChilds(self):
         return copy.deepcopy(self.__childs)
