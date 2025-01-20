@@ -461,12 +461,10 @@ class ServiceBase(metaclass=ABCMeta):
 
         if key in self.getInputs().keys():
             value = self.getInputs()[key]
-            loader = lambda: value
-
-        if not loader:
-            return data
-
-        value = self.__resolve(loader)
+        else:
+            if not loader:
+                return data
+            value = self.__resolve(loader)
 
         if self.__isResolveError(value):
             return data
