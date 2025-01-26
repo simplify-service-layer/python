@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "simplify-service-layer-base"
-version = "0.4.0"
+version = "0.4.1"
 description = ""
 authors = ["jongwoo Yoo <dbwhddn10@gmail.com>"]
 readme = "README.md"
