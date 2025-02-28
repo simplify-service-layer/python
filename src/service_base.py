@@ -522,7 +522,7 @@ class ServiceBase(ABC):
                     hasServicesInArray = True
 
         values = value if hasServicesInArray else [value]
-        hasError = False
+        hasResolveError = False
 
         for i, v in enumerate(values):
             service = None
@@ -552,11 +552,11 @@ class ServiceBase(ABC):
 
                 if self.__isResolveError(resolved):
                     del values[i]
-                    hasError = True
+                    hasResolveError = True
                     self.__validations[key] = False
                 values[i] = resolved
 
-        if not hasError:
+        if not hasResolveError:
             self.__data[key] = values if hasServicesInArray else values[0]
 
         return self.__data
