@@ -239,7 +239,7 @@ class ServiceBase(ABC):
             if "" == value:
                 del data[key]
 
-        return cls().init(data, names)
+        return cls().setWith(data, names)
 
     @classmethod
     def isInitable(self, value):
@@ -302,7 +302,7 @@ class ServiceBase(ABC):
     def getValidations(self):
         return copy.deepcopy(self.__validations)
 
-    def init(
+    def setWith(
         self,
         inputs: Dict[str, Any] = {},
         names: Dict[str, str] = {},
