@@ -494,7 +494,6 @@ class ServiceBase(ABC):
         return arr
 
     def __getLoadedDataWith(self, key):
-        # let hasServicesInArray, hasError, values
         data = self.getData()
         loader = (
             self.getAllLoaders()[key] if key in self.getAllLoaders().keys() else None
