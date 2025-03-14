@@ -325,6 +325,18 @@ class ServiceBase(ABC):
                     + self.__class__.__name__
                 )
 
+        for key in inputs.keys():
+            if key in self.__inputs.keys():
+                raise Exception(
+                    key + " input key is duplicated in " + self.__class__.__name__
+                )
+
+        for key in names.keys():
+            if key in self.__names.keys():
+                raise Exception(
+                    key + " name key is duplicated in " + self.__class__.__name__
+                )
+
         self.__inputs = inputs
         self.__names = names
 
