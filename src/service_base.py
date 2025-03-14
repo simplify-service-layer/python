@@ -325,13 +325,8 @@ class ServiceBase(ABC):
                     + self.__class__.__name__
                 )
 
-        self.__childs = {}
-        self.__data = {}
-        self.__errors = {}
         self.__inputs = inputs
         self.__names = names
-        self.__validations = {}
-        self.__isRun = False
 
         self.getAllCallbacks()
         self.getAllLoaders()
@@ -339,6 +334,14 @@ class ServiceBase(ABC):
         return self._clone()
 
     def run(self):
+        if self.__isRun:
+            raise Exception("already run service [" + self.__class__.__name__ + "]")
+
+        self.__childs = {}
+        self.__data = {}
+        self.__errors = {}
+        self.__validations = {}
+
         totalErrors = self.getTotalErrors()
 
         if not self.__isRun:
