@@ -337,8 +337,8 @@ class ServiceBase(ABC):
                     key + " name key is duplicated in " + self.__class__.__name__
                 )
 
-        self.__inputs = inputs
-        self.__names = names
+        self.__inputs = self.__inputs | inputs
+        self.__names = self.__names | names
 
         self.getAllCallbacks()
         self.getAllLoaders()
