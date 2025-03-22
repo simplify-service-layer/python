@@ -337,6 +337,10 @@ class ServiceBase(ABC):
                     key + " name key is duplicated in " + self.__class__.__name__
                 )
 
+        for key in inputs.keys():
+            if "" == inputs[key]:
+                del inputs[key]
+
         self.__inputs = self.__inputs | inputs
         self.__names = self.__names | names
 
