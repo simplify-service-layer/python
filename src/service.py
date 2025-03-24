@@ -10,9 +10,14 @@ class Service(ServiceBase):
     @staticmethod
     def filterPresentRelatedRule(rule):
         rule = copy.deepcopy(rule)
+        hasPresentRule = False
 
         def removeNotPresentRules(rule: dict):
+            nonlocal hasPresentRule
+
             for x in [*rule.keys()]:
+                if x == "required":
+                    hasPresentRule = True
                 if x not in [
                     "required",
                     "properties",
@@ -41,7 +46,12 @@ class Service(ServiceBase):
 
             return rule
 
-        return removeNotPresentRules(rule)
+        removeNotPresentRules(rule)
+
+        if hasPresentRule:
+            return rule
+
+        return None
 
     @staticmethod
     def getDependencyKeysInRule(rule):
