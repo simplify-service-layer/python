@@ -302,53 +302,6 @@ class ServiceBase(ABC):
     def getValidations(self):
         return copy.deepcopy(self.__validations)
 
-    def setWith(
-        self,
-        inputs: Dict[str, Any] = {},
-        names: Dict[str, str] = {},
-    ):
-        if self.__isRun:
-            raise Exception("already run service [" + self.__class__.__name__ + "]")
-
-        for key in inputs.keys():
-            if key in self.getInjectedPropNames():
-                raise Exception(
-                    key
-                    + " input key is duplicated with property in "
-                    + self.__class__.__name__
-                )
-
-            if not re.match(r"^[a-zA-Z][\w-]{0,}", key):
-                raise Exception(
-                    key
-                    + " input key is not support pattern in "
-                    + self.__class__.__name__
-                )
-
-        for key in inputs.keys():
-            if key in self.__inputs.keys():
-                raise Exception(
-                    key + " input key is duplicated in " + self.__class__.__name__
-                )
-
-        for key in names.keys():
-            if key in self.__names.keys():
-                raise Exception(
-                    key + " name key is duplicated in " + self.__class__.__name__
-                )
-
-        for key in inputs.keys():
-            if "" == inputs[key]:
-                del inputs[key]
-
-        self.__inputs = self.__inputs | inputs
-        self.__names = self.__names | names
-
-        self.getAllCallbacks()
-        self.getAllLoaders()
-
-        return self._clone()
-
     def run(self):
         if self.__isRun:
             raise Exception("already run service [" + self.__class__.__name__ + "]")
@@ -400,6 +353,53 @@ class ServiceBase(ABC):
 
     def setParent(self, parent):
         self.__parent = parent
+
+    def setWith(
+        self,
+        inputs: Dict[str, Any] = {},
+        names: Dict[str, str] = {},
+    ):
+        if self.__isRun:
+            raise Exception("already run service [" + self.__class__.__name__ + "]")
+
+        for key in inputs.keys():
+            if key in self.getInjectedPropNames():
+                raise Exception(
+                    key
+                    + " input key is duplicated with property in "
+                    + self.__class__.__name__
+                )
+
+            if not re.match(r"^[a-zA-Z][\w-]{0,}", key):
+                raise Exception(
+                    key
+                    + " input key is not support pattern in "
+                    + self.__class__.__name__
+                )
+
+        for key in inputs.keys():
+            if key in self.__inputs.keys():
+                raise Exception(
+                    key + " input key is duplicated in " + self.__class__.__name__
+                )
+
+        for key in names.keys():
+            if key in self.__names.keys():
+                raise Exception(
+                    key + " name key is duplicated in " + self.__class__.__name__
+                )
+
+        for key in inputs.keys():
+            if "" == inputs[key]:
+                del inputs[key]
+
+        self.__inputs = self.__inputs | inputs
+        self.__names = self.__names | names
+
+        self.getAllCallbacks()
+        self.getAllLoaders()
+
+        return self._clone()
 
     def _clone(self):
         return copy.copy(self)
