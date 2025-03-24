@@ -302,6 +302,48 @@ class ServiceBase(ABC):
     def getValidations(self):
         return copy.deepcopy(self.__validations)
 
+    def resolveBindName(self, name):
+        while True:
+            boundKeys = self.__getBindKeysInName(name)
+            if not boundKeys:
+                break
+
+            key = boundKeys[0]
+            keySegs = key.split(".")
+            mainKey = keySegs[0]
+            bindNames = copy.deepcopy(self.getAllBindNames())
+            bindNames.update(self.__names)
+
+            if mainKey in bindNames:
+                bindName = bindNames[mainKey]
+            else:
+                raise Exception(
+                    '"' + mainKey + '" name not exists in ' + self.__class__.__name__,
+                )
+
+            pattern = r"\{\{(\s*)" + key + r"(\s*)\}\}"
+            replace = self.resolveBindName(bindName)
+            name = re.sub(pattern, replace, name)
+            matches = re.findall(r"\[\.\.\.\]", name)
+
+            if len(matches) > 1:
+                raise Exception(
+                    name + ' has multiple "[...]" string in ' + self.__class__.__name__
+                )
+            if self.__hasArrayObjectRuleInRuleLists(mainKey) and not matches:
+                raise Exception(
+                    '"'
+                    + mainKey
+                    + '" name is required "[...]" string in '
+                    + self.__class__.__name__
+                )
+
+            if len(keySegs) > 1:
+                replace = "[" + "][".join(keySegs[1:]) + "]"
+                name = re.sub(r"\[\.\.\.\]", replace, name)
+
+        return name
+
     def run(self):
         if self.__isRun:
             raise Exception("already run service [" + self.__class__.__name__ + "]")
@@ -317,6 +359,9 @@ class ServiceBase(ABC):
             if not self.__parent:
                 for callback in self.__onStartCallbacks:
                     callback()
+            else:
+                for key in self.__names.keys():
+                    self.__names[key] = self.__parent.resolveBindName(self.__names[key])
 
             for key in self.getInputs().keys():
                 self.__validate(key)
@@ -553,7 +598,7 @@ class ServiceBase(ABC):
                     v.append({})
 
                 for k, name in v[2].items():
-                    v[2][k] = self.__resolveBindName(name)
+                    v[2][k] = self.resolveBindName(name)
 
                 service = self.initService(v)
                 service.setParent(self)
@@ -665,48 +710,6 @@ class ServiceBase(ABC):
 
         return func(*depVals)
 
-    def __resolveBindName(self, name):
-        while True:
-            boundKeys = self.__getBindKeysInName(name)
-            if not boundKeys:
-                break
-
-            key = boundKeys[0]
-            keySegs = key.split(".")
-            mainKey = keySegs[0]
-            bindNames = copy.deepcopy(self.getAllBindNames())
-            bindNames.update(self.__names)
-
-            if mainKey in bindNames:
-                bindName = bindNames[mainKey]
-            else:
-                raise Exception(
-                    '"' + mainKey + '" name not exists in ' + self.__class__.__name__,
-                )
-
-            pattern = r"\{\{(\s*)" + key + r"(\s*)\}\}"
-            replace = self.__resolveBindName(bindName)
-            name = re.sub(pattern, replace, name)
-            matches = re.findall(r"\[\.\.\.\]", name)
-
-            if len(matches) > 1:
-                raise Exception(
-                    name + ' has multiple "[...]" string in ' + self.__class__.__name__
-                )
-            if self.__hasArrayObjectRuleInRuleLists(mainKey) and not matches:
-                raise Exception(
-                    '"'
-                    + mainKey
-                    + '" name is required "[...]" string in '
-                    + self.__class__.__name__
-                )
-
-            if len(keySegs) > 1:
-                replace = "[" + "][".join(keySegs[1:]) + "]"
-                name = re.sub(r"\[\.\.\.\]", replace, name)
-
-        return name
-
     def __resolveError(self):
         return Exception("can't be resolve")
 
@@ -817,7 +820,7 @@ class ServiceBase(ABC):
             )
 
             if ruleLists:
-                names[mainKey] = self.__resolveBindName("{{" + mainKey + "}}")
+                names[mainKey] = self.resolveBindName("{{" + mainKey + "}}")
 
             for k, ruleList in ruleLists.items():
                 for j, rule in enumerate(ruleList):
@@ -848,10 +851,10 @@ class ServiceBase(ABC):
                             self.__validations[key] = False
                             del ruleLists[k][j]
 
-                        names[depKey] = self.__resolveBindName("{{" + depKey + "}}")
+                        names[depKey] = self.resolveBindName("{{" + depKey + "}}")
 
             for k, ruleList in ruleLists.items():
-                names[k] = self.__resolveBindName("{{" + k + "}}")
+                names[k] = self.resolveBindName("{{" + k + "}}")
 
             messages = self.getValidationErrorTemplateMessages()
 
