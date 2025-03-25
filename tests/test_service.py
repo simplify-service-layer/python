@@ -260,15 +260,17 @@ def test_load_data_from_property():
     class Service1(Service):
         def __init__(self) -> None:
             super().__init__()
-            self.result: str = "aaa"
+            self.key1: str = "aaa"
 
         def getBindNames():
             return {
+                "key1": "name for key1",
                 "result": "name for result",
             }
 
         def getLoaders():
-            pass
+            def result(key1):
+                return key1
 
         def getRuleLists():
             return {
@@ -286,15 +288,17 @@ def test_load_data_from_property():
     class Service2(Service):
         def __init__(self) -> None:
             super().__init__()
-            self.result: List[str] = ["aaa", "bbb", "ccc"]
+            self.key1: List[str] = ["aaa", "bbb", "ccc"]
 
         def getBindNames():
             return {
+                "key1": "name for key1",
                 "result": "name for result",
             }
 
         def getLoaders():
-            pass
+            def result(key1):
+                return key1
 
         def getRuleLists():
             return {

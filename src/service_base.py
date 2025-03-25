@@ -548,14 +548,19 @@ class ServiceBase(ABC):
     def __getBindKeysInName(self, str):
         return re.findall(self.BIND_NAME_EXP, str)
 
-    def __getClosureDependencies(self, func):
-        arr = []
-        sig = inspect.signature(func)
+    def __getClosureDependencies(self, func, excludeProps=True):
+        deps = []
+        params = inspect.signature(func).parameters
+        props = self.getInjectedPropNames()
 
-        for key in sig.parameters.keys():
-            arr.append(key)
+        for key in params.keys():
+            if excludeProps:
+                if not key in props:
+                    deps.append(key)
+            else:
+                deps.append(key)
 
-        return arr
+        return deps
 
     def __getLoadedDataWith(self, key):
         data = self.getData()
@@ -568,8 +573,6 @@ class ServiceBase(ABC):
 
         if key in self.getInputs().keys():
             value = self.getInputs()[key]
-        elif key in self.getInjectedPropNames():
-            value = getattr(self, key)
         else:
             if not loader:
                 return data
@@ -689,22 +692,24 @@ class ServiceBase(ABC):
         return isinstance(value, errorClass)
 
     def __resolve(self, func):
-        sig = inspect.signature(func)
-        depNames = self.__getClosureDependencies(func)
+        props = self.getInjectedPropNames()
+        depNames = self.__getClosureDependencies(func, False)
         depVals = []
         params = {}
 
-        for key, param in sig.parameters.items():
-            params[key] = param.default
+        for key, param in inspect.signature(func).parameters.items():
+            params[key] = param
 
         for i, depName in enumerate(depNames):
-            if self.__validations[depName] and depName in self.__data.keys():
+            if depName in props:
+                depVals.append(getattr(self, depName))
+            elif self.__validations[depName] and depName in self.__data.keys():
                 depVals.append(self.__data[depName])
             elif (
                 self.__validations[depName]
-                and params[depName] != inspect.Parameter.empty
+                and params[depName].default != inspect.Parameter.empty
             ):
-                depVals.append(params[depName])
+                depVals.append(params[depName].default)
             else:
                 return self.__resolveError()
 
