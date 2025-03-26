@@ -824,9 +824,6 @@ class ServiceBase(ABC):
                 ruleLists,
             )
 
-            if ruleLists:
-                names[mainKey] = self.resolveBindName("{{" + mainKey + "}}")
-
             for k, ruleList in ruleLists.items():
                 for j, rule in enumerate(ruleList):
                     depKeysInRule = cls.getDependencyKeysInRule(rule)
@@ -859,7 +856,8 @@ class ServiceBase(ABC):
                         names[depKey] = self.resolveBindName("{{" + depKey + "}}")
 
             for k, ruleList in ruleLists.items():
-                names[k] = self.resolveBindName("{{" + k + "}}")
+                if ruleList:
+                    names[k] = self.resolveBindName("{{" + k + "}}")
 
             messages = self.getValidationErrorTemplateMessages()
 
