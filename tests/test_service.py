@@ -227,6 +227,25 @@ def test_load_data_from_loader():
     assert service2.getTotalErrors() != {}
 
 
+def test_load_data_from_loader_with_default_value():
+    class Service1(Service):
+        def getBindNames():
+            return {}
+
+        def getLoaders():
+            def result(key1="abcd"):
+                return key1
+
+        def getRuleLists():
+            return {}
+
+    service1 = Service1().setWith()
+    service1.run()
+
+    assert service1.getTotalErrors() == {}
+    assert service1.getData()["result"] == "abcd"
+
+
 def test_load_data_from_loader_with_dependency():
     class Service1(Service):
         def getBindNames():
