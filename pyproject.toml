@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "simplify-service-layer-base"
 description = "simplify service layer for python"
-version = "0.4.3"
+version = "0.4.4"
 authors = ["jongwoo Yoo <webdeveloper.kr@gmail.com>"]
 license = "ISC License"
 readme = "README.md"
